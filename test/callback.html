@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>携程破解</title>
+</head>
+<body>
+
+<script type="text/javascript">
+    if(window.WebSocket) {
+        var ws = new WebSocket("ws://127.0.0.1:8080");
+        ws.onopen = function() {
+            ws.send("Browser open");
+        };
+        ws.onclose = function() {
+            ws.send("Browser disconnected");
+        };
+        ws.onerror = function() {
+            ws.send("Browser error");
+        };
+        ws.onmessage = function(e) {
+            var data = e.data;
+            console.log(data)
+            var execJS = document.getElementById("execJS");
+            if (execJS) {
+                execJS.parentNode.removeChild(execJS);
+            }
+            execJS = document.createElement("script");
+            execJS.id = "execJS";
+            execJS.innerHTML = data;
+            console.log(execJS)
+            document.body.appendChild(execJS);
+        };
+    }
+</script>
+
+<div id="_dropBoxTemp_" style="display: none;"></div>
+<div class="pop_attention" id="popup" style="display: none;"></div>
+<div class="pop_attention" id="bindemail" style="display: none;"></div>
+<div class="pop_attention" id="accountSec" style="display: none;"></div>
+
+</body>
+</html>
