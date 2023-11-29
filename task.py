@@ -1,6 +1,7 @@
 from PyQt5.QtCore import QThread, pyqtSignal
-from platform.xiecheng import XieCheng
+from webPlatform import XieCheng
 from utils.utils import logger
+
 import selenium.common.exceptions
 
 
@@ -15,12 +16,16 @@ class SearchTask(QThread):
         self.params = params
 
     def run(self):
+        # 携程任务
+        self._xc_task()
+
+    def _xc_task(self):
         # 初始化爬虫，主要确认驱动是否存在
         try:
             spider = XieCheng(params=self.params)
         except selenium.common.exceptions.SessionNotCreatedException:
             logger.info('驱动存在问题，请确认路径是否正确。')
-            self.log_signal('驱动存在问题，请确认路径是否正确。')
+            self.log_signal.emit('驱动存在问题，请确认路径是否正确。')
             return
 
         self.platform_signal.emit('携程')
@@ -48,20 +53,34 @@ class SearchTask(QThread):
             self.log_signal.emit('cookie 直接读取成功，该 cookie 有效，直接登录。')
 
         # 保存 cookie
-        spider.store_cookie()
+        spider.store_cookie_file()
         self.log_signal.emit('cookie 保存成功，以待下次直接登录。')
         logger.info('保存 cookie 成功，以待下次直接登录。')
 
-        # 根据搜索条件，到达 target 酒店
-        spider.go_target()
+        # 获取 city_id
+        spider.get_city_by_keyword()
+        self.log_signal.emit('成功获取 city_id: {}。'.format(spider.params['main']['city_id']))
+        self.log_signal.emit('所有初始化程序已经完成，现在正式开始爬虫程序。期间会打开浏览器空白网页，请不要关闭。')
+        logger.info('成功获取 city_id: {}。'.format(spider.params['main']['city_id']))
 
-        # 开始搜索
-        hotel_list = spider.get_hotel_info()
-        self.log_signal.emit('成功获取酒店 {} 家，准备开始写入。'.format(len(hotel_list)))
+        # 获取酒店列表
+        spider.get_hotel_list()
+        self.log_signal.emit('成功获取酒店 {} 家，准备开始写入。'.format(len(spider.hotel_list)))
+        logger.info('成功获取 city_id: {}。'.format(spider.params['main']['city_id']))
 
-        # 完成搜索，开始查找酒店细节
-        spider.get_hotel_detail(hotel_list)
-        self.log_signal.emit('成功写入酒店数据，完成搜索任务。')
+        # 获取酒店详情
+
+
+        # # 根据搜索条件，到达 target 酒店
+        # spider.go_target()
+        #
+        # # 开始搜索
+        # hotel_list = spider.get_hotel_info()
+        # self.log_signal.emit('成功获取酒店 {} 家，准备开始写入。'.format(len(hotel_list)))
+        #
+        # # 完成搜索，开始查找酒店细节
+        # spider.get_hotel_detail(hotel_list)
+        # self.log_signal.emit('成功写入酒店数据，完成搜索任务。')
 
 
 class CountTask(QThread):

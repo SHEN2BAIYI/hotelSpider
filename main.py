@@ -8,7 +8,7 @@ import time
 import re
 
 from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox, QFileDialog
-from PyQt5.QtGui import QStandardItemModel, QStandardItem
+from PyQt5.QtGui import QStandardItemModel, QStandardItem, QPixmap
 from PyQt5.QtCore import QThread, pyqtSignal, QThreadPool, QObject
 from PIL import Image, ImageQt
 
@@ -110,6 +110,8 @@ class MyWindow(QMainWindow, SpiderWindow):
 
         in_time = int(time.mktime(in_time))
         out_time = int(time.mktime(out_time))
+        params['main']['in_time'] = in_time
+        params['main']['out_time'] = out_time
 
         if in_time >= out_time:
             logger.info('用户选择时间有误，请重新选择。')
