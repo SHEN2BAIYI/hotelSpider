@@ -116,9 +116,13 @@ class XieCheng:
         self.test_ab.clear()
         self.search_time = 0
 
-        stop_thread(self.thread_client)
-        stop_thread(self.thread_server)
+        self.client.ws.close()
+        self.server.stop_event.set()
         logger.info('爬虫端：清理数据成功，端口释放完毕。')
+
+        time.sleep(5)
+        print(self.thread_client.is_alive())
+        print(self.thread_server.is_alive())
 
     """ 获取 hotel 详情 """
     def get_hotel_detail(self):
@@ -412,13 +416,13 @@ class XieCheng:
         logger.info('爬虫端：成功创建 websocket 客户端。')
 
     def __init_websocket_server(self):
-        def run():
-            new_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(new_loop)
-            asyncio.get_event_loop().run_until_complete(websockets.serve(self.server.echo, 'localhost', 8080))
-            asyncio.get_event_loop().run_forever()
+        # def run():
+        #     new_loop = asyncio.new_event_loop()
+        #     asyncio.set_event_loop(new_loop)
+        #     asyncio.get_event_loop().run_until_complete(websockets.serve(self.server.echo, 'localhost', 8080))
+        #     asyncio.get_event_loop().run_forever()
 
-        self.thread_server = threading.Thread(target=run)
+        self.thread_server = threading.Thread(target=self.server.run)
         self.thread_server.start()
         logger.info('爬虫端：成功创建 websocket 服务器。')
 
@@ -536,7 +540,7 @@ class XieCheng:
 if __name__ == '__main__':
     spider = XieCheng({
         'setting': {
-            'driver_path': 'D:/pythonProject/hotelSpider/chromedriver.exe',
+            'driver_path': 'E:/pythonProject/hotelSpider/chromedriver.exe',
         },
         'main': {
             'destination': '成都',
@@ -545,7 +549,7 @@ if __name__ == '__main__':
     })
 
     spider.get_city_by_keyword()
-    spider.load_cookie_file('D:\pythonProject\hotelSpider\source\cookie')
+    spider.load_cookie_file('E:\pythonProject\hotelSpider\source\cookie')
     spider.store_cookie_file('')
     spider.start_server_client()
     spider.get_hotel_list()

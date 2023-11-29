@@ -1,6 +1,6 @@
 import asyncio
 import json
-
+import threading
 import websockets
 import webbrowser
 import os
@@ -15,6 +15,8 @@ class XieChengServer:
         self.conn_code = None
         webbrowser.register("chrome", None,
                             webbrowser.BackgroundBrowser(webbrowser_path))
+
+        self.stop_event = threading.Event()
 
     async def echo(self, websocket, path):
         async for message in websocket:
@@ -82,5 +84,12 @@ class XieChengServer:
                             await soc.send(json.dumps(message))
                             break
 
+    async def echo_server(self, stop):
+        async with websockets.serve(self.echo, "localhost", 8080):
+            await stop
 
-
+    def run(self):
+        new_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(new_loop)
+        stop = new_loop.run_in_executor(None, self.stop_event.wait)
+        new_loop.run_until_complete(self.echo_server(stop))
