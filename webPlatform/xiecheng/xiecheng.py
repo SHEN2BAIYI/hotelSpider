@@ -181,19 +181,25 @@ class XieCheng:
                     'ServerData': '',
                 }
 
-                # 发出请求
-                response = requests.post(
-                    'https://m.ctrip.com/restapi/soa2/21881/json/rateplan',
-                    params=params,
-                    cookies=self.cookies,
-                    headers=self.headers,
-                    json=json_data,
-                )
+                try:
+                    # 发出请求
+                    response = requests.post(
+                        'https://m.ctrip.com/restapi/soa2/21881/json/rateplan',
+                        params=params,
+                        cookies=self.cookies,
+                        headers=self.headers,
+                        json=json_data,
+                    )
+                except requests.exceptions.SSLError:
+                    self.wrong_hotel_id.append(id)
+                    logger.info('爬虫端：酒店 {} 获取失败，已经加入错误酒店列表。'.format(id))
+                    continue
 
                 # 解析请求
                 try:
                     res = json.loads(response.text)['Response']['baseRooms']
                     self.hotel_list[id]['roomList'] = res
+                    time.sleep(random.random() * 5 + 1)
                 except KeyError:
                     self.wrong_hotel_id.append(id)
                     logger.info('爬虫端：酒店 {} 获取失败，已经加入错误酒店列表。'.format(id))
@@ -325,15 +331,31 @@ class XieCheng:
 
         # 存储结果
         for hotel in hotel_list:
-            info = {
-                'hotelId': hotel['base']['hotelId'],
-                'hotelName': hotel['base']['hotelName'],
-                'hotelType': hotel['base']['hotelTypeTag'],
-                'hotelScore': hotel['score']['number'] if 'number' in hotel['score'].keys() else -1,
-                'hotelAddress': hotel['position']['address'],
-            }
+
+            info = {}
+
+            if 'hotelId' in hotel['base'].keys():
+                info['hotelId'] = hotel['base']['hotelId']
+
+            if 'hotelName' in hotel['base'].keys():
+                info['hotelName'] = hotel['base']['hotelName']
+
+            if 'hotelTypeTag' in hotel['base'].keys():
+                info['hotelType'] = hotel['base']['hotelTypeTag']
+            else:
+                info['hotelType'] = ''
+
+            if 'number' in hotel['score'].keys():
+                info['hotelScore'] = hotel['score']['number']
+            else:
+                info['hotelScore'] = -1
+
+            if 'address' in hotel['position'].keys():
+                info['hotelAddress'] = hotel['position']['address']
+
             self.hotel_list[hotel['base']['hotelId']] = info
 
+        time.sleep(random.random() * 5 + 2)
         if len(self.hotel_list) < int(self.params['main']['max_num_hotel']):
             self.get_hotel_list()
 
