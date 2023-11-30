@@ -1,9 +1,10 @@
-from utils.utils import *
+import numpy as np
 
 
-res = json2dict('./source/cookie/xc.json')
-cookies = {}
-for i in res:
-    cookies[i['name']] = i['value']
+a = {}
+for i in range(122):
+    a[str(i)] = str(i + 10)
 
-print(1)
+
+splits = np.array_split(list(a.keys()), 6)
+print(len(a))

@@ -3,8 +3,8 @@ import json
 
 
 class XieChengClient:
-    def __init__(self):
-        self.url = 'ws://127.0.0.1:8080'
+    def __init__(self, port):
+        self.url = 'ws://127.0.0.1:{}'.format(port)
         self.ws = None
         self.testab = []
 

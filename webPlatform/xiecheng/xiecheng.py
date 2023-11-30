@@ -6,6 +6,8 @@ import base64
 import requests
 import execjs
 import threading
+import numpy as np
+import random
 import asyncio
 import websockets
 
@@ -17,8 +19,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 from utils.utils import dict2json, json2dict, logger, stop_thread
-from websocket_client import XieChengClient
-from websocket_server import XieChengServer
+from .websocket_client import XieChengClient
+from .websocket_server import XieChengServer
 
 from io import BytesIO
 from PIL import Image
@@ -57,8 +59,9 @@ class XieCheng:
 
         """  更多参数 """
         # test_ab 相关的客户端和服务器
-        self.client = XieChengClient()
-        self.server = XieChengServer()
+        self.client = XieChengClient(port=self.params['setting']['port'])
+        self.server = XieChengServer(webbrowser_path=self.params['setting']['web_path'],
+                                     port=self.params['setting']['port'])
         self.test_ab = []
         self.thread_client = None
         self.thread_server = None
@@ -66,6 +69,9 @@ class XieCheng:
         # 酒店列表
         self.hotel_list = {}
         self.search_time = 0
+
+        # 错误酒店列表
+        self.wrong_hotel_id = []
 
     """ 保存并清理数据 """
     def store_and_clear(self):
@@ -76,39 +82,48 @@ class XieCheng:
         ws.append(['酒店名称', '酒店类型', '酒店评分', '酒店地址', '酒店类型',
                    '房间名称', '房间价格', '房量提示', '有无早餐', '可住人数'])
         for hotel_id, hotel in self.hotel_list.items():
-            for room in hotel['roomList']:
-                for room_sale in room['saleRoom']:
-                    # 查看有无房
-                    room_flag = '房量充足'
-                    if room_sale['base']['isFullRoom']:
-                        room_flag = "无房"
+            try:
+                for room in hotel['roomList']:
+                    for room_sale in room['saleRoom']:
+                        # 查看有无房
+                        room_flag = '房量充足'
+                        if room_sale['base']['isFullRoom']:
+                            room_flag = "无房"
 
-                    for tag in room_sale['tags']:
-                        if "仅剩" in tag['title']:
-                            room_flag = tag['title']
-                            break
+                        for tag in room_sale['tags']:
+                            if "仅剩" in tag['title']:
+                                room_flag = tag['title']
+                                break
 
-                    # 查看有无早餐
-                    breakfast = '无早餐'
-                    for fac in room_sale['facility']:
-                        if '早餐' in fac['content']:
-                            breakfast = fac['content']
-                            break
+                        # 查看有无早餐
+                        breakfast = '无早餐'
+                        for fac in room_sale['facility']:
+                            if '早餐' in fac['content']:
+                                breakfast = fac['content']
+                                break
 
-                    ws.append([
-                        hotel['hotelName'],
-                        hotel['hotelType'],
-                        hotel['hotelScore'],
-                        hotel['hotelAddress'],
-                        hotel['hotelType'],
+                        ws.append([
+                            hotel['hotelName'],
+                            hotel['hotelType'],
+                            hotel['hotelScore'],
+                            hotel['hotelAddress'],
+                            hotel['hotelType'],
 
-                        room['baseRoom']['roomName'],
-                        room_sale['money']['filterPrice'],
-                        room_flag,
-                        breakfast,
-                        room_sale['base']['maxGuest'],
-                    ])
-        wb.save('hotel.xlsx')
+                            room['baseRoom']['roomName'],
+                            room_sale['money']['filterPrice'],
+                            room_flag,
+                            breakfast,
+                            room_sale['base']['maxGuest'],
+                        ])
+            except KeyError:
+                continue
+
+        wb.save(os.path.join(self.params['setting']['output_path'],
+                             '{}-{}-{}-xc.xlsx').format(
+            datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S"),
+            self.params['main']['in_time'],
+            self.params['main']['out_time'],
+        ))
         logger.info('爬虫端：保存数据成功。')
 
         # 清理数据
@@ -118,11 +133,8 @@ class XieCheng:
 
         self.client.ws.close()
         self.server.stop_event.set()
-        logger.info('爬虫端：清理数据成功，端口释放完毕。')
-
-        time.sleep(5)
-        print(self.thread_client.is_alive())
-        print(self.thread_server.is_alive())
+        time.sleep(2)
+        logger.info('爬虫端：清理数据成功，当前服务器状态 {}，客户端状态 {}。'.format(self.thread_server.is_alive(), self.thread_client.is_alive()))
 
     """ 获取 hotel 详情 """
     def get_hotel_detail(self):
@@ -141,8 +153,8 @@ class XieCheng:
                     'testab': test_ab,
                 }
                 json_data = {
-                    'checkIn': '2023-11-29',
-                    'checkOut': '2023-11-30',
+                    'checkIn': self.params['main']['in_time'],
+                    'checkOut': self.params['main']['out_time'],
                     'priceType': '',
                     'adult': 1,
                     'popularFacilityType': '',
@@ -179,23 +191,22 @@ class XieCheng:
                 )
 
                 # 解析请求
-                res = json.loads(response.text)['Response']['baseRooms']
-                self.hotel_list[id]['roomList'] = res
+                try:
+                    res = json.loads(response.text)['Response']['baseRooms']
+                    self.hotel_list[id]['roomList'] = res
+                except KeyError:
+                    self.wrong_hotel_id.append(id)
+                    logger.info('爬虫端：酒店 {} 获取失败，已经加入错误酒店列表。'.format(id))
+                    continue
 
         logger.info('爬虫端：开始获取酒店详情。')
 
+        keys_list = np.array_split(list(self.hotel_list.keys()), int(self.params['setting']['th_num']))
         ths_list = []
-        key_list = []
-        for index, key in enumerate(self.hotel_list.keys()):
-            # 线程数据装载
-            key_list.append(key)
-
-            # 线程启动
-            if len(key_list) == 5 or index == len(self.hotel_list.keys()) - 1:
-                task = threading.Thread(target=do, args=(key_list,))
-                task.start()
-                ths_list.append(task)
-                key_list = []
+        for keys in keys_list:
+            th = threading.Thread(target=do, args=(keys,))
+            th.start()
+            ths_list.append(th)
 
         # 等待线程结束
         for th in ths_list:
@@ -236,8 +247,8 @@ class XieCheng:
                 #                              self.params['main']['in_day']),
                 # 'checkOut': '{}-{}-{}'.format(self.params['main']['out_year'], self.params['main']['out_month'],
                 #                               self.params['main']['out_day']),
-                'checkIn': '2023-11-29',
-                'checkOut': '2023-11-30',
+                'checkIn': self.params['main']['in_time'],
+                'checkOut': self.params['main']['out_time'],
                 'roomNum': 1,
                 'mapType': '',
                 'travelPurpose': 0,
@@ -318,12 +329,12 @@ class XieCheng:
                 'hotelId': hotel['base']['hotelId'],
                 'hotelName': hotel['base']['hotelName'],
                 'hotelType': hotel['base']['hotelTypeTag'],
-                'hotelScore': hotel['score']['number'],
+                'hotelScore': hotel['score']['number'] if 'number' in hotel['score'].keys() else -1,
                 'hotelAddress': hotel['position']['address'],
             }
             self.hotel_list[hotel['base']['hotelId']] = info
 
-        if len(self.hotel_list) < self.params['main']['max_hotel_num']:
+        if len(self.hotel_list) < int(self.params['main']['max_num_hotel']):
             self.get_hotel_list()
 
     """ 开启获取 test_ab 的 server 和 client """
@@ -367,11 +378,17 @@ class XieCheng:
     """ 服务器会根据 callback 生成 testab 的 JS 代码 """
     @staticmethod
     def __get_callback():
-        with open('callback.js', 'r', encoding='utf-8') as f:
-            js_code = f.read()
+        # with open('./source/static/callback.js', 'r', encoding='utf-8') as f:
+        #     js_code = f.read()
+        #
+        # ctx = execjs.compile(js_code)
+        # res = ctx.call('callback')
+        characters = "qwertyuiopasdfg$hjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM"
+        res = ""
 
-        ctx = execjs.compile(js_code)
-        res = ctx.call('callback')
+        for _ in range(10):
+            res += random.choice(characters)
+
         logger.info('爬虫端：成功生成 callback 参数: {}。'.format(res))
         return res
 

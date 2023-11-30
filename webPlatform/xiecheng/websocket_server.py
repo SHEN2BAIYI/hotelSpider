@@ -9,7 +9,8 @@ from utils.utils import logger
 
 
 class XieChengServer:
-    def __init__(self, webbrowser_path="C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"):
+    def __init__(self, webbrowser_path, port):
+        self.port = port
         self.conn_web = None
         self.conn_spiders = []
         self.conn_code = None
@@ -47,8 +48,9 @@ class XieChengServer:
                     logger.info('服务器：无网页端连接，创建连接。')
 
                     # 打开浏览器，创建连接。
-                    path = os.getcwd() + '/callback.html'
+                    path = os.getcwd() + '/source/static/callback.html'
                     webbrowser.get('chrome').open('file://{}'.format(path))
+                    logger.info('服务器：无网页端连接，打开网页 - {}。'.format(path))
 
                 else:
                     logger.info('服务器：有网页端连接，发送 JS 代码。')
@@ -57,7 +59,8 @@ class XieChengServer:
                     except websockets.exceptions.ConnectionClosedOK:
                         # 不小心关掉了网页
                         # 打开浏览器，创建连接。
-                        path = os.getcwd() + '/callback.html'
+                        path = os.getcwd() + '/source/static/callback.html'
+                        logger.info('服务器：网页端连接关闭，重新打开网页 - {}。'.format(path))
                         webbrowser.get('chrome').open('file://{}'.format(path))
 
             """ 浏览器消息 """
@@ -85,7 +88,7 @@ class XieChengServer:
                             break
 
     async def echo_server(self, stop):
-        async with websockets.serve(self.echo, "localhost", 8080):
+        async with websockets.serve(self.echo, "localhost", int(self.port)):
             await stop
 
     def run(self):

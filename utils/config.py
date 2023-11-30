@@ -4,10 +4,8 @@ import configparser
 
 CONFIG_FILE = './config/Config.cfg'
 
-
+""" 通过输入的 dict 形成 cfg 文件 """
 def save_config(cfg_dict):
-    """ 通过输入的 dict 形成 cfg 文件 """
-
     conf = configparser.ConfigParser()
 
     # 遍历
@@ -20,14 +18,17 @@ def save_config(cfg_dict):
             conf.set(key1, key2, cfg_dict[key1][key2])
 
     # 写入
-    cfg_file = open(CONFIG_FILE, 'w')
+    try:
+        cfg_file = open(CONFIG_FILE, 'w')
+    except FileNotFoundError:
+        os.mkdir('./config')
+        cfg_file = open(CONFIG_FILE, 'w')
     conf.write(cfg_file)
     cfg_file.close()
 
 
+""" 读取 cfg 文件, 返回 dict """
 def read_config():
-    """ 读取 cfg 文件, 返回 dict """
-
     try:
         if os.path.exists(CONFIG_FILE):
             config = configparser.ConfigParser()
